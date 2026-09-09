@@ -1,17 +1,28 @@
 #include <stdio.h>
-#include "../include/args.h"
-#include "../include/proc_info.h"
-#include "../include/output.h"
+
+#include "args.h"
+#include "output.h"
+#include "proc_info.h"
 
 int main(int argc, char **argv) {
-    struct proc_args a = set_args(argc, argv);
+    pid_t pid;
+    struct proc_info info;
 
-    if (a.pid <= 0) {
-        printf("Usage: %s <pid>\n", argc > 0 ? argv[0] : "procview");
+    if (parse_pid(argc, argv, &pid) != 0) {
+        if (argc == 2) {
+            fprintf(stderr, "Invalid PID: %s\n", argv[1]);
+        }
+        fprintf(stderr, "Usage: %s <pid>\n", argv[0]);
+        return 2;
+    }
+
+    process_info_init(&info);
+    if (process_info_load(&info, pid) != 0) {
+        process_info_destroy(&info);
         return 1;
     }
 
-    struct proc_info p = get_info(a.pid);
-    print_info(p);
+    print_info(&info);
+    process_info_destroy(&info);
     return 0;
 }

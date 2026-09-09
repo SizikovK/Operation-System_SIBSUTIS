@@ -3,6 +3,6 @@
 
 #include "proc_info.h"
 
-void print_info(struct proc_info);
+void print_info(const struct proc_info *info);
 
-#endif /* OUTPUT_H */
+#endif

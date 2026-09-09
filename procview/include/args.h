@@ -1,10 +1,8 @@
 #ifndef ARGS_H
 #define ARGS_H
 
-struct proc_args {
-    int pid;
-};
+#include <sys/types.h>
 
-struct proc_args set_args(int argc, char **argv);
+int parse_pid(int argc, char **argv, pid_t *pid);
 
-#endif /* ARGS_H */
+#endif

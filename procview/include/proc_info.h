@@ -1,29 +1,20 @@
 #ifndef PROC_INFO_H
 #define PROC_INFO_H
 
-#define PROC_PATH "/proc/%d/status"
-
-enum states {
-    R,
-    S,
-    D,
-    T,
-    t,
-    Z,
-    I,
-};
+#include <stddef.h>
+#include <sys/types.h>
 
 struct proc_info {
-    int pid;
-    char* name;
-    enum states state;
-    int ppid;
-    char* cmdline;
-    int ofd;
+    pid_t pid;
+    pid_t parent_pid;
+    char *name;
+    char state;
+    char *command_line;
+    size_t fd_count;
 };
 
+void process_info_init(struct proc_info *info);
+void process_info_destroy(struct proc_info *info);
+int process_info_load(struct proc_info *info, pid_t pid);
 
-struct proc_info get_info(int pid);
-
-#endif /* PROC_INFO_H */
-
+#endif

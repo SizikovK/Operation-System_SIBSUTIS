@@ -1,11 +1,28 @@
-#include "../include/output.h"
+#include "output.h"
+
 #include <stdio.h>
 
-void print_info(struct proc_info p) {
-    printf("PID: %d\n", p.pid);
-    if (p.name) printf("Name: %s\n", p.name);
-    printf("State: %d\n", p.state);
-    printf("PPID: %d\n", p.ppid);
-    if (p.cmdline) printf("Cmd: %s\n", p.cmdline);
-    printf("Open fds: %d\n", p.ofd);
+static const char *state_description(char state) {
+    switch (state) {
+        case 'R': return "running";
+        case 'S': return "sleeping";
+        case 'D': return "uninterruptible sleep";
+        case 'T': return "stopped";
+        case 't': return "tracing stop";
+        case 'Z': return "zombie";
+        case 'I': return "idle";
+        default:  return "unknown";
+    }
+}
+
+void print_info(const struct proc_info *info) {
+    printf("Process information\n\n");
+    printf("PID: %d\n", (int)info->pid);
+    printf("Name: %s\n", info->name);
+    printf("State: %c (%s)\n", info->state,
+           state_description(info->state));
+    printf("Parent PID: %d\n", (int)info->parent_pid);
+    printf("Command line: %s\n",
+           info->command_line != NULL ? info->command_line : "[not available]");
+    printf("Open file descriptors: %zu\n", info->fd_count);
 }
