@@ -10,11 +10,15 @@
 #define LINE_SIZE 512
 #define CMD_CHUNK 256
 
+static void log_file_error(const char *message, const char *path) {
+    fprintf(stderr, "%s %s: %s\n", message, path, strerror(errno));
+}
+
 static int make_path(char *path, size_t size, pid_t pid, const char *file) {
     int length = snprintf(path, size, "/proc/%d/%s", (int)pid, file);
 
     if (length < 0 || (size_t)length >= size) {
-        fprintf(stderr, "Cannot create path for PID %d\n", (int)pid);
+        fprintf(stderr, "Не удалось создать путь для процесса %d\n", (int)pid);
         return -1;
     }
     return 0;
@@ -67,7 +71,7 @@ static int read_status(struct proc_info *info, pid_t requested_pid) {
 
     file = fopen(path, "r");
     if (file == NULL) {
-        fprintf(stderr, "Cannot open %s: %s\n", path, strerror(errno));
+        log_file_error("Не удалось открыть", path);
         return -1;
     }
 
@@ -76,9 +80,12 @@ static int read_status(struct proc_info *info, pid_t requested_pid) {
 
         if (strncmp(line, "Name:", 5) == 0) {
             value = field_value(line);
+            if (value == NULL) {
+                continue;
+            }
             info->name = copy_string(value);
             if (info->name == NULL) {
-                fprintf(stderr, "Cannot allocate memory\n");
+                fprintf(stderr, "Не удалось выделить память\n");
                 fclose(file);
                 return -1;
             }
@@ -91,26 +98,30 @@ static int read_status(struct proc_info *info, pid_t requested_pid) {
             }
         } else if (strncmp(line, "Pid:", 4) == 0) {
             value = field_value(line);
-            info->pid = (pid_t)strtol(value, NULL, 10);
-            pid_found = 1;
+            if (value != NULL) {
+                info->pid = (pid_t)strtol(value, NULL, 10);
+                pid_found = 1;
+            }
         } else if (strncmp(line, "PPid:", 5) == 0) {
             value = field_value(line);
-            info->parent_pid = (pid_t)strtol(value, NULL, 10);
-            ppid_found = 1;
+            if (value != NULL) {
+                info->parent_pid = (pid_t)strtol(value, NULL, 10);
+                ppid_found = 1;
+            }
         }
     }
 
     if (ferror(file)) {
-        fprintf(stderr, "Cannot read %s: %s\n", path, strerror(errno));
+        log_file_error("Не удалось прочитать", path);
         fclose(file);
         return -1;
     }
     if (fclose(file) != 0) {
-        fprintf(stderr, "Cannot close %s: %s\n", path, strerror(errno));
+        log_file_error("Не удалось закрыть", path);
         return -1;
     }
     if (!name_found || !state_found || !pid_found || !ppid_found) {
-        fprintf(stderr, "Required fields are missing in %s\n", path);
+        fprintf(stderr, "В файле %s нет нужных данных\n", path);
         return -1;
     }
     return 0;
@@ -128,37 +139,34 @@ static int read_cmdline(struct proc_info *info) {
     }
     file = fopen(path, "rb");
     if (file == NULL) {
-        fprintf(stderr, "Cannot open %s: %s\n", path, strerror(errno));
+        log_file_error("Не удалось открыть", path);
         return -1;
     }
 
-    for (;;) {
-        size_t count = fread(chunk, 1, sizeof(chunk), file);
-        if (count > 0) {
-            char *larger = realloc(buffer, length + count + 1);
-            if (larger == NULL) {
-                fprintf(stderr, "Cannot allocate memory\n");
-                free(buffer);
-                fclose(file);
-                return -1;
-            }
-            buffer = larger;
-            memcpy(buffer + length, chunk, count);
-            length += count;
+    size_t count = fread(chunk, 1, sizeof(chunk), file);
+    while (count > 0) {
+        char *larger = realloc(buffer, length + count + 1);
+
+        if (larger == NULL) {
+            fprintf(stderr, "Не удалось выделить память\n");
+            free(buffer);
+            fclose(file);
+            return -1;
         }
-        if (count < sizeof(chunk)) {
-            break;
-        }
+        buffer = larger;
+        memcpy(buffer + length, chunk, count);
+        length += count;
+        count = fread(chunk, 1, sizeof(chunk), file);
     }
 
     if (ferror(file)) {
-        fprintf(stderr, "Cannot read %s: %s\n", path, strerror(errno));
+        log_file_error("Не удалось прочитать", path);
         free(buffer);
         fclose(file);
         return -1;
     }
     if (fclose(file) != 0) {
-        fprintf(stderr, "Cannot close %s: %s\n", path, strerror(errno));
+        log_file_error("Не удалось закрыть", path);
         free(buffer);
         return -1;
     }
@@ -167,10 +175,12 @@ static int read_cmdline(struct proc_info *info) {
         return 0;
     }
 
-    for (size_t i = 0; i < length; i++) {
+    size_t i = 0;
+    while (i < length) {
         if (buffer[i] == '\0') {
             buffer[i] = ' ';
         }
+        i++;
     }
     while (length > 0 && buffer[length - 1] == ' ') {
         length--;
@@ -190,7 +200,7 @@ static int count_file_descriptors(struct proc_info *info) {
     }
     directory = opendir(path);
     if (directory == NULL) {
-        fprintf(stderr, "Cannot open %s: %s\n", path, strerror(errno));
+        log_file_error("Не удалось открыть", path);
         return -1;
     }
 
@@ -203,12 +213,12 @@ static int count_file_descriptors(struct proc_info *info) {
     }
 
     if (errno != 0) {
-        fprintf(stderr, "Cannot read %s: %s\n", path, strerror(errno));
+        log_file_error("Не удалось прочитать", path);
         closedir(directory);
         return -1;
     }
     if (closedir(directory) != 0) {
-        fprintf(stderr, "Cannot close %s: %s\n", path, strerror(errno));
+        log_file_error("Не удалось закрыть", path);
         return -1;
     }
     return 0;
@@ -230,9 +240,13 @@ void process_info_destroy(struct proc_info *info) {
 }
 
 int process_info_load(struct proc_info *info, pid_t pid) {
-    if (read_status(info, pid) != 0 ||
-        read_cmdline(info) != 0 ||
-        count_file_descriptors(info) != 0) {
+    if (read_status(info, pid) != 0) {
+        return -1;
+    }
+    if (read_cmdline(info) != 0) {
+        return -1;
+    }
+    if (count_file_descriptors(info) != 0) {
         return -1;
     }
     return 0;
